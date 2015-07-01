@@ -1,0 +1,233 @@
+## Preparing the 138 dataset for additional experimentation (last catnet took till 120)
+### Reduce the number of all continuous, for 2 quantiles (for interpretability) 
+#### SDNN also in same way for person level interpretability
+
+library(catnet)
+library(bnlearn)
+
+pata_input <- read.csv('C:\\Users\\karthik\\Google Drive\\GSA DATA\\Data integration\\working_files\\all_data_june17_g.csv')
+
+### Testing
+# d <- subset(pata_input,pata_input$SDNN < 180 & pata_input$SDNN > 0)
+
+pata_input$ID <- as.factor(pata_input$ID)
+
+## Impute numerical as well as categorical
+## Step 3: Discretize
+
+### Discretize temperature:
+
+pata_in <- pata_input
+
+## Age ##
+
+for(i in 1:nrow(pata_in))
+{
+  if(pata_in$Age[i] < 30){pata_in$Age_gr[i]= "twenties" } else
+    if(pata_in$Age[i] >= 30 & pata_in$Age[i] < 40){pata_in$Age_gr[i]= "thirties" } else
+      if(pata_in$Age[i] >= 40 & pata_in$Age[i] < 50){pata_in$Age_gr[i]= "forties" } else
+        if(pata_in$Age[i] >= 50 & pata_in$Age[i] < 60){pata_in$Age_gr[i]= "fifties" } else
+        {pata_in$Age_gr[i]= "senior" }   
+}    
+
+for(i in 1:nrow(pata_in))
+{
+  if(pata_in$BMI[i] < 18.5){pata_in$BMI_gr[i]= "underweight" } else
+    if(pata_in$BMI[i] >= 18.5 & pata_in$BMI[i] < 25){pata_in$BMI_gr[i]= "normal" } else
+      if(pata_in$BMI[i] >= 25 & pata_in$BMI[i] < 30){pata_in$BMI_gr[i]= "overweight" } else
+      {pata_in$BMI_gr[i]= "obese" }   
+} 
+
+## Discretize other stuff
+
+pata_in$caffeine <- as.factor(pata_in$caffeine)
+
+pata_BN_num <- pata_in[,colnames(pata_in)%in% c("SDNN",
+                                                "CO2","Activity","Pressure","Temperature"
+                                                                              )]
+pata_discrete <- cnDiscretize(pata_BN_num,2,mode="quantile")
+
+for(col in 1:ncol(pata_discrete))
+{
+  pata_discrete[,col] <- as.factor(pata_discrete[,col])
+  levels(pata_discrete[,col]) <- c("Low","High")
+}
+
+## Prepare the final dataset:
+
+pata_BN_cat <- data.frame(pata_discrete,
+                          pata_in[,c('ID','Base_location',
+                                     'ToD','DoW','preoccupation','caffeine','Room.type','window_view',
+                                     'white.noise','Natural_light','BMI_gr','Age_gr','Gender'
+                                     ,'Ethnicity') ])
+
+## Last moment changes:
+
+pata_BN_cat <- subset(pata_BN_cat,!pata_BN_cat$ID == 115)
+
+pata_BN_a <- pata_BN_cat
+#pata_BN_cat$ID <- as.numeric(pata_BN_cat$ID)
+
+#pata_BN_cat <- pata_BN_a
+
+#pata_BN_cat <- subset(pata_BN_cat,!pata_BN_cat$ID %in% c(128,131,132,133,135,136,137,138))
+
+pata_BN_cat$ID <- factor(pata_BN_cat$ID)
+
+pata_sdnn2 <- subset(pata_in,!pata_in$ID == 115)
+
+# pata_SDNN <- pata_BN_cat[,!colnames(pata_BN_cat) %in% c('LFHF','nHF','ID','space')]
+
+pata_SDNN <- pata_BN_cat
+
+#write.csv(pata_SDNN,'C:\\Users\\karthik\\Google Drive\\GSA DATA\\Data integration\\working_files\\BN_discrete_SDNN_june28.csv')
+
+write.csv(pata_SDNN,'C:\\Users\\karthik\\Google Drive\\GSA DATA\\Data integration\\working_files\\BN_discrete_SDNN_june28_participant.csv')
+
+#### Analysis ###
+
+count <- vector()
+numeric_fl <- vector()
+
+for(col in 1:ncol(pata_SDNN))
+{
+  count[col] <- sum(!is.na(pata_SDNN[,col]))
+  ifelse (is.numeric(pata_SDNN[,col]),numeric_fl[col] <- "Numeric", numeric_fl[col] <- "Categorical")
+}
+
+write.csv(cbind(colnames(pata_SDNN),count,numeric_fl),'C:\\Users\\karthik\\Google Drive\\GSA DATA\\Data integration\\working_files\\coldim_BN_discrete_28June_with_p.csv')
+
+pata_cat_138 <- pata_SDNN
+
+#colnames(pata_cat_138)$Natural <- c("Natural_light")
+colnames(pata_cat_138)[12] <- "Room_type"
+colnames(pata_cat_138)[14] <- "White_noise"
+
+pata_cat_138$BMI_gr <- as.factor(pata_cat_138$BMI_gr)
+pata_cat_138$Age_gr <- as.factor(pata_cat_138$Age_gr)
+
+pata_c <- pata_cat_138
+pata_c$Room_type[pata_c$Room_type == "Conference Room" ] <- c("Conference")
+pata_c$Natural_light[pata_c$Natural_light == "A LITTLE (FAR OFF)" ] <- c("NO")
+
+pata_c$Natural_light <- factor(pata_c$Natural_light)
+pata_c$Room_type <- factor(pata_c$Room_type)
+
+colnames(pata_c)
+
+pata_or <- pata_c[,c(4,1:3,5,10,11,13,14,15,12,7,8,9,16,17,18,19)]  ###SDNN first  ## Remove ID
+
+colnames(pata_or)
+
+[1] "SDNN"          "Pressure"      "CO2"           "Temperature"   "Activity"      "preoccupation"
+[7] "caffeine"      "window_view"   "White_noise"   "Natural_light" "Room_type"     "Base_location"
+[13] "ToD"           "DoW"           "BMI_gr"        "Age_gr"        "Gender"        "Ethnicity" 
+
+parPool <- list(
+  c(2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18),
+  c(2,11,12),
+  c(3,5,11,12),
+  c(4,13,11,12),
+  c(5,15,16,17,18),
+  c(6,11,12,13,14,15,16,17,18),
+  c(7),
+  c(8,11),
+  c(9,11),
+  c(10,11),
+  c(11,12),
+  c(12),
+  c(13),
+  c(14),
+  c(15),
+  c(16),
+  c(17),
+  c(18)
+)
+
+parPool3 <- list(
+  c(2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18),
+  c(2,11,12),
+  c(3,5,11,12),
+  c(4,13,11,12),
+  c(5,6,7),
+  c(6),
+  c(7),
+  c(8,11,12),
+  c(9,11,12),
+  c(10,11,12),
+  c(11),
+  c(12),
+  c(13),
+  c(14),
+  c(15),
+  c(16),
+  c(17),
+  c(18)
+)
+
+parPool2 <- list(
+  c(2,3,4,8,9,10,12,13,14,15,16,17,18),
+  c(2,11,12),
+  c(3,5,11,12),
+  c(4,13,11,12),
+  c(5,6,7),
+  c(6),
+  c(7),
+  c(8,11,12),
+  c(9,11,12),
+  c(10,11,12),
+  c(11),
+  c(12),
+  c(13),
+  c(14),
+  c(15),
+  c(16),
+  c(17),
+  c(18)
+)
+
+
+norder <- c(18:1)
+
+system.time(
+  part.SA4 <- cnSearchSA(data= pata_or,maxParentSet=4,parentsPool=parPool,maxIter=100,
+                          stopDiff=0.0001,numThreads=4)
+)
+
+part_BIC.SA4 <- cnFindBIC(object= part.SA4)
+
+part_AIC.SA4 <- cnFindAIC(object= part.SA4)
+cnMatEdges(part_AIC.SA4)
+
+cnMatEdges(part_BIC.SA4)
+
+cnPlotProb(part_BIC.SA4)
+
+prob_out <- cnProb(part_BIC.SA4)
+
+cnDot(part_BIC.SA4,"catnet_SA_BN_with_participant_29June.dot")
+
+save.image("catnet_SA_with_participants_29June")
+
+for(var in 1:length(prob_out))
+{
+  
+  cols <- colnames(prob_out[[1]])[1:(ncol(prob_out[[1]]) - length(levels(pata_or[,1])))] 
+  
+  x <- prob_out[[1]]
+  
+  z <- as.data.frame.matrix(x) 
+  
+  pata_f_sub <- pata_or[,colnames(pata_or)%in% cols]
+  
+  pata_f_sub$Support <- 0
+  d <- aggregate(Support ~ . ,data = pata_f_sub,length)
+  
+  y <- merge(z,d,by=dput(cols),all.x=TRUE)
+  
+  write.csv(y,"CPT_with_participants_29June.csv")
+  
+  ############################ 
+  
+  ## Predictions for the models (5-fold?)
+  
