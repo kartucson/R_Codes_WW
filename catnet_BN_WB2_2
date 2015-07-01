@@ -1,0 +1,222 @@
+## Preparing the 138 dataset for additional experimentation (last catnet took till 120)
+### Reduce the number of all continuous, for 2 quantiles (for interpretability) 
+#### SDNN also in same way for person level interpretability
+## Remove participant level variables!!!
+
+library(catnet)
+library(bnlearn)
+
+sata_input <- read.csv('C:\\Users\\karthik\\Google Drive\\GSA DATA\\Data integration\\working_files\\all_data_june17_g.csv')
+
+### Testing
+#d <- subset(sata_input,sata_input$SDNN < 180 & sata_input$SDNN > 0)
+
+sata_input$ID <- as.factor(sata_input$ID)
+
+## Impute numerical as well as categorical
+## Step 3: Discretize
+
+### Discretize temperature:
+
+sata_in <- sata_input
+
+## Age ##
+
+for(i in 1:nrow(sata_in))
+{
+  if(sata_in$Age[i] < 30){sata_in$Age_gr[i]= "twenties" } else
+    if(sata_in$Age[i] >= 30 & sata_in$Age[i] < 40){sata_in$Age_gr[i]= "thirties" } else
+      if(sata_in$Age[i] >= 40 & sata_in$Age[i] < 50){sata_in$Age_gr[i]= "forties" } else
+        if(sata_in$Age[i] >= 50 & sata_in$Age[i] < 60){sata_in$Age_gr[i]= "fifties" } else
+        {sata_in$Age_gr[i]= "senior" }   
+}    
+
+for(i in 1:nrow(sata_in))
+{
+  if(sata_in$BMI[i] < 18.5){sata_in$BMI_gr[i]= "underweight" } else
+    if(sata_in$BMI[i] >= 18.5 & sata_in$BMI[i] < 25){sata_in$BMI_gr[i]= "normal" } else
+      if(sata_in$BMI[i] >= 25 & sata_in$BMI[i] < 30){sata_in$BMI_gr[i]= "overweight" } else
+      {sata_in$BMI_gr[i]= "obese" }   
+} 
+
+## Discretize other stuff
+
+sata_in$caffeine <- as.factor(sata_in$caffeine)
+
+sata_BN_num <- sata_in[,colnames(sata_in)%in% c(
+                                                "CO2","Activity","Pressure","Temperature"
+)]
+sata_discrete <- cnDiscretize(sata_BN_num,2,mode="quantile")
+
+for(col in 1:ncol(sata_discrete))
+{
+  sata_discrete[,col] <- as.factor(sata_discrete[,col])
+  levels(sata_discrete[,col]) <- c("Low","High")
+}
+
+
+### Discretize SDNN and HRV
+
+sata_sdnn <- sata_in[,c('SDNN','nHF')]
+
+sata_hrv_p <- split(sata_sdnn,sata_in$ID)
+
+for(i in 1:length(sata_hrv_p))
+{
+ sata_hrv_p[[i]] <- cnDiscretize(sata_hrv_p[[i]],2,mode="quantile")
+  #sata_hrv_p[[i]] <- cnDiscretize(sata_hrv_p[[i]],3,mode="quantile")
+}  
+
+sata_hrv_t <- sata_hrv_p[[1]]
+
+for (i in 2:length(sata_hrv_p))
+{
+  sata_hrv_t <- rbind(sata_hrv_t,sata_hrv_p[[i]])
+}
+
+
+for(col in 1:ncol(sata_hrv_t))
+{
+  sata_hrv_t[,col] <- as.factor(sata_hrv_t[,col])
+  #levels(data_hrv_t[,col]) <- c("Very_Low","Low","High","Very_High")
+  levels(sata_hrv_t[,col]) <- c("Low","High")
+  #levels(sata_hrv_t[,col]) <- c("Low","Medium","High")
+}
+
+
+## Prepare the final dataset:
+
+sata_BN_cat <- data.frame(SDNN = sata_hrv_t,sata_discrete,
+                          sata_in[,c('ID','Base_location',
+                                     'ToD','DoW','preoccupation','caffeine','Room.type','window_view',
+                                     'white.noise','Natural_light')
+                                      ])
+
+## Last moment changes:
+
+sata_BN_cat <- subset(sata_BN_cat,!sata_BN_cat$ID == 115)
+
+sata_BN_a <- sata_BN_cat
+#sata_BN_cat$ID <- as.numeric(sata_BN_cat$ID)
+
+#sata_BN_cat <- subset(sata_BN_cat,!sata_BN_cat$ID %in% c(128,131,132,133,135,136,137,138))
+
+sata_BN_cat <- sata_BN_a
+
+sata_BN_cat$ID <- factor(sata_BN_cat$ID)
+
+sata_sdnn2 <- subset(sata_in,!sata_in$ID == 115)
+
+# sata_SDNN <- sata_BN_cat[,!colnames(sata_BN_cat) %in% c('LFHF','nHF','ID','space')]
+
+sata_SDNN <- sata_BN_cat
+
+#write.csv(sata_SDNN,'C:\\Users\\karthik\\Google Drive\\GSA DATA\\Data integration\\working_files\\BN_discrete_SDNN_june28.csv')
+
+write.csv(sata_SDNN,'C:\\Users\\karthik\\Google Drive\\GSA DATA\\Data integration\\working_files\\BN_discrete_SDNN_june28_sm_no_participant.csv')
+
+#### Analysis ###
+
+count <- vector()
+numeric_fl <- vector()
+
+for(col in 1:ncol(sata_SDNN))
+{
+  count[col] <- sum(!is.na(sata_SDNN[,col]))
+  ifelse (is.numeric(sata_SDNN[,col]),numeric_fl[col] <- "Numeric", numeric_fl[col] <- "Categorical")
+}
+
+write.csv(cbind(colnames(sata_SDNN),count,numeric_fl),'C:\\Users\\karthik\\Google Drive\\GSA DATA\\Data integration\\working_files\\coldim_BN_discrete_28June_with_no_P.csv')
+
+sata_cat_120 <- sata_SDNN[,!colnames(sata_SDNN) %in% c('ID','SDNN.nHF')]
+
+sata_c <- sata_cat_120
+sata_c$Room.type[sata_c$Room.type == "Conference Room" ] <- c("Conference")
+sata_c$Natural_light[sata_c$Natural_light == "A LITTLE (FAR OFF)" ] <- c("NO")
+
+sata_c$Natural_light <- factor(sata_c$Natural_light)
+sata_c$Room.type <- factor(sata_c$Room.type)
+
+colnames(sata_c)[1] <- "SDNN"
+
+sata_or <- sata_c[,c(1:5,9,10,12,13,14,11,6,7,8)]
+
+colnames(sata_or)
+
+[1] "SDNN"          "Pressure"      "CO2"           "Temperature"   "Activity"      "preoccupation"
+[7] "caffeine"      "window_view"   "white.noise"   "Natural_light" "Room.type"     "Base_location"
+[13] "ToD"           "DoW" 
+
+parPool <- list(
+  # c(2,3,4,7,11,12,13,14),
+  c(2,3,4,5,6,7,8,9,10,11,12,13,14), ## SDNN depends on 
+  c(2,11,12),         ### Pressure On Base_location & Room type only
+  c(3,5,11,12),      ## CO2 depends on location and activity
+  c(4,13,11,12),   ## Temp adds ToD
+  c(5),  ## Activity depends on location and ToD & time of week 
+  c(6,11,12,13,14),  ## Same with preoccupation
+  c(7),           ## Just to compare
+  c(8,11),      # Space
+  c(9,11),      # 
+  c(10,11),     #
+  c(11,12),
+  c(12),
+  c(13),
+  c(14)
+  
+)
+
+parPool2 <- list(
+  c(2,3,4,5,6,7,8,9,10,11,12,13,14),
+  c(2,11,12),         ### On Base_location & Room type only
+  c(3,13,11,12),
+  c(4,13,11,12),
+  c(5,6,7,11,12,13),
+  c(6,11,12,13,14),
+  c(7,12),
+  c(8,11,12),
+  c(9,11,12),
+  c(10,11,12),
+  c(11),
+  c(12),
+  c(13),
+  c(14)
+  
+)
+
+system.time(
+  short.SA4 <- cnSearchSA(data= sata_or,maxParentSet=4,parentsPool=parPool,maxIter=100,
+                           stopDiff=0.0001,numThreads=4)
+)
+#  700 seconds
+
+short_BIC.SA4 <- cnFindBIC(object= short.SA4)
+
+short_AIC.SA4 <- cnFindAIC(object= short.SA4)
+cnMatEdges(short_AIC.SA4)
+
+cnMatEdges(short_BIC.SA4)
+
+cnPlotProb(short_BIC.SA4)
+
+prob_out <- cnProb(short_BIC.SA4)
+
+cnDot(short_BIC.SA4,"catnet_SA_BN_without_participant_29thJune.dot")
+
+save.image("catnet_SA_with_no_participants_29thJune")
+
+
+for(var in 1:length(prob_out))
+{
+  
+  var <- 4    ## For temperature
+  
+  cols <- colnames(prob_out[[var]])[1:(ncol(prob_out[[var]]) - length(levels(sata_or[,var])))] 
+  x <- prob_out[[var]]
+  z <- as.data.frame.matrix(x) 
+  sata_f_sub <- sata_or[,colnames(sata_or)%in% cols]
+  sata_f_sub$Support <- 0
+  d <- aggregate(Support ~ . ,data = sata_f_sub,length)
+  y <- merge(z,d,by=dput(cols),all.x=TRUE)   
+  
+  write.csv(y,"CPT_without_participants_29June.csv")
